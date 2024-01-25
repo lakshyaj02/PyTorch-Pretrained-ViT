@@ -17,7 +17,7 @@ def load_pretrained_weights(
     load_repr_layer=False,
     resize_positional_embedding=False,
     verbose=True,
-    strict=True,
+    strict=False,
 ):
     """Loads pretrained weights from weights path or download using url.
     Args:

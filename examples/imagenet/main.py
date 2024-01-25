@@ -19,11 +19,12 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
-from pytorch_pretrained_vit import ViT, load_pretrained_weights
+
+from pytorch_pretrained_vit import ViT, load_pretrained_weights, BlockSparseViT
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
+# parser.add_argument('data', metavar='DIR',
+#                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     help='model architecture (default: resnet18)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -196,28 +197,8 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     normalize = transforms.Normalize(0.5, 0.5)
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(args.image_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_transforms = transforms.Compose([
         transforms.Resize(args.image_size, interpolation=PIL.Image.BICUBIC),
@@ -225,18 +206,17 @@ def main_worker(gpu, ngpus_per_node, args):
         transforms.ToTensor(),
         normalize,
     ])
-    print('Using image size', args.image_size)
+    imagenet_data = datasets.ImageNet('/home/lj9979/PyTorch-Pretrained-ViT/examples/imagenet/data/', split='val', transform = val_transforms)
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, val_transforms),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+    # imagenet_data.target_transform(val_transforms)
 
-    if args.evaluate:
-        res = validate(val_loader, model, criterion, args)
-        with open('res.txt', 'w') as f:
-            print(res, file=f)
-        return
+    val_loader = torch.utils.data.DataLoader(imagenet_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+
+    # if args.evaluate:
+    #     res = validate(val_loader, model, criterion, args)
+    #     with open('res.txt', 'w') as f:
+    #         print(res, file=f)
+    #     return
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -244,7 +224,7 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
+        # train(train_loader, model, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
@@ -416,7 +396,8 @@ def accuracy(output, target, topk=(1,)):
 
         res = []
         for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+            # correct_k = torch.topk(correct.reshape(-1).float().sum(0, keepdim=True), k)[0]
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
